@@ -13,6 +13,14 @@ class Settings(BaseSettings):
     log_level: str = Field("INFO", alias="MEML_LOG_LEVEL")
     data_dir: str = Field("/opt/memL/data/chromadb", alias="MEML_DATA_DIR")
     tenants_file: str = Field("/opt/memL/tenants.yaml", alias="MEML_TENANTS_FILE")
+    admin_token: str = Field("", alias="MEML_ADMIN_TOKEN")
+
+    # 检索/去重
+    dedup_enabled: bool = Field(True, alias="MEML_DEDUP_ENABLED")
+    dedup_threshold: float = Field(0.92, alias="MEML_DEDUP_THRESHOLD")
+    hybrid_alpha: float = Field(0.7, alias="MEML_HYBRID_ALPHA")
+
+    # embedding
     embed_api_url: str = Field(..., alias="MEML_EMBED_API_URL")
     embed_api_key: str = Field(..., alias="MEML_EMBED_API_KEY")
     embed_model: str = Field(..., alias="MEML_EMBED_MODEL")
@@ -28,3 +36,8 @@ def load_tenants(path: str) -> dict:
     with open(path, "r", encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
     return data.get("tenants", {})
+
+
+def save_tenants(path: str, tenants: dict) -> None:
+    with open(path, "w", encoding="utf-8") as f:
+        yaml.safe_dump({"tenants": tenants}, f, allow_unicode=True, sort_keys=True)

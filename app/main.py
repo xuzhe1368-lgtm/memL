@@ -11,7 +11,9 @@ from app.config import settings, load_tenants
 from app.middleware.auth import auth_middleware
 from app.services.embedding import EmbeddingService
 from app.services.vectorstore import VectorStore
+from app.services.metrics import Metrics
 from app.routers.memory import router as memory_router
+from app.routers.admin import router as admin_router
 
 logging.basicConfig(
     level=getattr(logging, settings.log_level.upper(), logging.INFO),
@@ -29,6 +31,7 @@ app.middleware("http")(auth_middleware)
 async def request_id_middleware(request: Request, call_next):
     rid = request.headers.get("X-Request-ID", str(uuid.uuid4()))
     request.state.request_id = rid
+    request.app.state.metrics.inc("requests_total")
     response = await call_next(request)
     response.headers["X-Request-ID"] = rid
     return response
@@ -69,8 +72,10 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 @app.on_event("startup")
 async def startup():
     app.state.tenants = load_tenants(settings.tenants_file)
+    app.state.admin_token = settings.admin_token
     app.state.embedding = EmbeddingService()
     app.state.vs = VectorStore()
+    app.state.metrics = Metrics()
     logger.info("memL started, tenants=%d", len(app.state.tenants))
 
 
@@ -96,4 +101,10 @@ async def health_ready():
     return {"ok": True}
 
 
+@app.get("/metrics")
+async def metrics():
+    return {"ok": True, "data": app.state.metrics.snapshot()}
+
+
 app.include_router(memory_router)
+app.include_router(admin_router)
