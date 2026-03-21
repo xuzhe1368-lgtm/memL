@@ -4,6 +4,7 @@ from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel, Field
 
 from app.config import settings, load_tenants, save_tenants
+from app.services.audit import audit_log
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -37,6 +38,16 @@ async def upsert_tenant(payload: TenantUpsert, request: Request):
         "enabled": payload.enabled,
     }
     save_tenants(settings.tenants_file, tenants)
+    audit_log(
+        action="tenant.upsert",
+        actor="admin",
+        detail={
+            "token_prefix": payload.token[:6] + "***",
+            "name": payload.name,
+            "collection": payload.collection,
+            "enabled": payload.enabled,
+        },
+    )
     return {"ok": True}
 
 
@@ -48,4 +59,30 @@ async def disable_tenant(token: str, request: Request):
     cur = tenants[token]
     cur["enabled"] = False
     save_tenants(settings.tenants_file, tenants)
+    audit_log(
+        action="tenant.disable",
+        actor="admin",
+        detail={
+            "token_prefix": token[:6] + "***",
+            "name": cur.get("name", ""),
+            "collection": cur.get("collection", ""),
+        },
+    )
     return {"ok": True}
+
+
+@router.get('/audit')
+async def get_audit(limit: int = 100):
+    from pathlib import Path
+    p = Path(settings.audit_log_file)
+    if not p.exists():
+        return {"ok": True, "data": {"total": 0, "records": []}}
+    lines = p.read_text(encoding='utf-8').splitlines()[-max(1, min(limit, 1000)):]
+    out = []
+    import json
+    for ln in lines:
+        try:
+            out.append(json.loads(ln))
+        except Exception:
+            continue
+    return {"ok": True, "data": {"total": len(out), "records": out}}
