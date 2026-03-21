@@ -4,6 +4,7 @@ import logging
 import uuid
 
 from fastapi import FastAPI, Request
+from fastapi.responses import FileResponse
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 
@@ -104,6 +105,16 @@ async def health_ready():
 @app.get("/metrics")
 async def metrics():
     return {"ok": True, "data": app.state.metrics.snapshot()}
+
+
+@app.get('/ui')
+async def ui_index():
+    return FileResponse('app/ui/index.html')
+
+
+@app.get('/ui/{asset}')
+async def ui_assets(asset: str):
+    return FileResponse(f'app/ui/{asset}')
 
 
 app.include_router(memory_router)

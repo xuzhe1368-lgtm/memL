@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>memL Console</title>
+  <link rel="stylesheet" href="/ui/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">🧠 memL Console</div>
+    <div class="top-actions">
+      <input id="apiUrl" value="http://127.0.0.1:8000" />
+      <input id="token" placeholder="Bearer token" />
+      <button id="connectBtn">连接</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <h3>记忆分析</h3>
+      <div id="cats"></div>
+      <h3>高频主题</h3>
+      <div id="tags"></div>
+    </aside>
+
+    <main class="main">
+      <section class="cards">
+        <div class="card"><div class="num" id="total">-</div><div class="label">条记忆</div></div>
+        <div class="card"><div class="num" id="writes">-</div><div class="label">写入次数</div></div>
+        <div class="card"><div class="num" id="searches">-</div><div class="label">检索次数</div></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-title">Memory Pulse</div>
+        <div class="panel-row">
+          <div>
+            <h4>检索</h4>
+            <div class="search-row">
+              <input id="q" placeholder="输入关键词检索" />
+              <button id="searchBtn">搜索</button>
+            </div>
+          </div>
+          <div>
+            <h4>新增记忆</h4>
+            <div class="search-row">
+              <input id="newText" placeholder="输入要保存的记忆" />
+              <button id="saveBtn">保存</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-title">Memory List</div>
+        <div id="list" class="list"></div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/ui/app.js"></script>
+</body>
+</html>
