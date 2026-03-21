@@ -23,11 +23,14 @@ def main():
     with out.open("w", encoding="utf-8") as f:
         for i, mem_id in enumerate(rows.get("ids", [])):
             embs = rows.get("embeddings")
+            emb = embs[i] if embs is not None else None
+            if emb is not None and hasattr(emb, "tolist"):
+                emb = emb.tolist()
             rec = {
                 "id": mem_id,
                 "document": rows.get("documents", [])[i],
                 "metadata": rows.get("metadatas", [])[i],
-                "embedding": embs[i] if embs is not None else None,
+                "embedding": emb,
             }
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
