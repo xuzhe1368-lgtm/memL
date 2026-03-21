@@ -76,9 +76,9 @@ async def create_memory(payload: MemoryCreate, request: Request):
                 return {"ok": True, "data": out}
 
     md = _pack_meta(payload.meta, payload.tags, ts, ts)
-    request.app.state.vs.add(col, mem_id, payload.text, embedding, md)
 
     if async_mode:
+        # 先排队，避免 add() 触发 Chroma 默认 embedding 回退
         queue_append({
             "collection": col,
             "id": mem_id,
@@ -88,6 +88,8 @@ async def create_memory(payload: MemoryCreate, request: Request):
             "created": ts,
             "updated": ts,
         })
+    else:
+        request.app.state.vs.add(col, mem_id, payload.text, embedding, md)
 
     request.app.state.metrics.inc("memory_writes_total")
     out = {

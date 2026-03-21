@@ -31,7 +31,12 @@ async def process_pending_writes(app):
 
             emb = await app.state.embedding.embed(text)
             md = _pack_meta(meta, tags, created, updated)
-            app.state.vs.update(col, mem_id, text=text, embedding=emb, metadata=md)
+            # 异步补算采用 upsert 语义：不存在就 add，存在就 update
+            row = app.state.vs.get(col, mem_id)
+            if row:
+                app.state.vs.update(col, mem_id, text=text, embedding=emb, metadata=md)
+            else:
+                app.state.vs.add(col, mem_id, text=text, embedding=emb, metadata=md)
         except Exception:
             remain.append(line)
 
