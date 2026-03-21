@@ -28,9 +28,9 @@ echo "安装 Python 包..."
 # 5. 创建数据目录
 mkdir -p /opt/memL/data/chromadb
 
-# 6. 设置权限
+# 6. 设置权限（最小范围）
 echo "设置权限..."
-chown -R meml:meml /opt/memL
+chown -R meml:meml /opt/memL/app /opt/memL/data /opt/memL/venv /opt/memL/.env /opt/memL/tenants.yaml 2>/dev/null || true
 
 # 7. 安装 systemd 服务
 echo "安装 systemd 服务..."

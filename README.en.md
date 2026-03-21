@@ -143,3 +143,5 @@ In `~/.openclaw/openclaw.json`:
 - `ops/AUDIT.md` – audit logging
 - `ops/RBAC.md` – role model
 - `DR_RUNBOOK.md` – disaster recovery drill
+- `ops/caddy.meml.example` – Caddy HTTPS reverse proxy example
+- `ops/nginx.meml.example` – Nginx HTTPS reverse proxy example

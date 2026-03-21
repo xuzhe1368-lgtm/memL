@@ -267,6 +267,8 @@ curl -X POST http://127.0.0.1:8000/memory \
 - `ops/AUDIT.md`：管理审计
 - `ops/RBAC.md`：权限分层
 - `DR_RUNBOOK.md`：灾备演练
+- `ops/caddy.meml.example`：Caddy HTTPS 反代示例
+- `ops/nginx.meml.example`：Nginx HTTPS 反代示例
 
 ---
 
