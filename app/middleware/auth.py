@@ -46,4 +46,5 @@ async def auth_middleware(request: Request, call_next):
 
     request.state.token = token
     request.state.tenant = tenant
+    request.state.role = tenant.get("role", "editor")
     return await call_next(request)

@@ -13,12 +13,19 @@ from app.config import settings
 router = APIRouter()
 
 
+def _require_write_role(request: Request):
+    role = getattr(request.state, 'role', 'editor')
+    if role not in ('editor', 'admin'):
+        raise HTTPException(status_code=403, detail='forbidden: write requires editor/admin role')
+
+
 def now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 @router.post("/memory")
 async def create_memory(payload: MemoryCreate, request: Request):
+    _require_write_role(request)
     tenant = request.state.tenant
     tenant_name = tenant.get("name", tenant.get("collection", "default"))
     col = tenant["collection"]
@@ -128,6 +135,7 @@ async def get_memory(mem_id: str, request: Request):
 
 @router.patch("/memory/{mem_id}")
 async def update_memory(mem_id: str, payload: MemoryUpdate, request: Request):
+    _require_write_role(request)
     col = request.state.tenant["collection"]
     row = request.app.state.vs.get(col, mem_id)
     if not row:
@@ -167,6 +175,7 @@ async def update_memory(mem_id: str, payload: MemoryUpdate, request: Request):
 
 @router.delete("/memory/{mem_id}")
 async def delete_memory(mem_id: str, request: Request):
+    _require_write_role(request)
     col = request.state.tenant["collection"]
     request.app.state.vs.delete(col, mem_id)
     return {"ok": True}

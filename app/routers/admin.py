@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel, Field
+from typing import Literal
 
 from app.config import settings, load_tenants, save_tenants
 from app.services.audit import audit_log
@@ -13,6 +14,7 @@ class TenantUpsert(BaseModel):
     token: str = Field(..., min_length=8)
     name: str = Field(..., min_length=1)
     collection: str = Field(..., min_length=1)
+    role: Literal['viewer','editor','admin'] = 'editor'
     enabled: bool = True
 
 
@@ -24,6 +26,7 @@ async def list_tenants(request: Request):
             "token_prefix": token[:6] + "***",
             "name": t.get("name", ""),
             "collection": t.get("collection", ""),
+            "role": t.get("role", "editor"),
             "enabled": bool(t.get("enabled", True)),
         })
     return {"ok": True, "data": {"total": len(out), "tenants": out}}
@@ -35,6 +38,7 @@ async def upsert_tenant(payload: TenantUpsert, request: Request):
     tenants[payload.token] = {
         "name": payload.name,
         "collection": payload.collection,
+        "role": payload.role,
         "enabled": payload.enabled,
     }
     save_tenants(settings.tenants_file, tenants)
@@ -45,6 +49,7 @@ async def upsert_tenant(payload: TenantUpsert, request: Request):
             "token_prefix": payload.token[:6] + "***",
             "name": payload.name,
             "collection": payload.collection,
+            "role": payload.role,
             "enabled": payload.enabled,
         },
     )
