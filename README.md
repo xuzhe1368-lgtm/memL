@@ -69,6 +69,39 @@ sudo systemctl start memL
 sudo systemctl enable memL
 ```
 
+### 给“龙虾”用户的一键命令（直接复制）
+
+> 下面这段是给直接在龙虾里看的同学准备的：按顺序复制执行即可。
+
+```bash
+# 0) 安装到 /opt/memL
+sudo mkdir -p /opt && cd /opt
+sudo git clone https://github.com/xuzhe1368-lgtm/memL.git || true
+cd /opt/memL
+
+# 1) 生成配置
+sudo cp -n .env.example .env
+sudo cp -n tenants.yaml tenants.yaml.bak 2>/dev/null || true
+
+# 2) 编辑关键参数（至少改这三项）
+# MEML_ADMIN_TOKEN=你自己的强口令
+# MEML_EMBED_API_URL=你的 embedding API 地址
+# MEML_EMBED_API_KEY=你的 embedding API key
+sudo nano /opt/memL/.env
+
+# 3) 部署并启动
+sudo chmod +x /opt/memL/deploy.sh
+sudo /opt/memL/deploy.sh
+sudo systemctl enable --now memL
+
+# 4) 健康检查
+curl -sS http://127.0.0.1:8000/health/live
+curl -sS http://127.0.0.1:8000/metrics/prom | head
+```
+
+# 5) OpenClaw 接入（在本机 ~/.openclaw/openclaw.json 里配置）
+# apiUrl 填 memL 地址，apiKey 填 tenants.yaml 对应 token
+
 验证：
 
 ```bash

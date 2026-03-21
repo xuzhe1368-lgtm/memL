@@ -34,6 +34,34 @@ sudo systemctl enable --now memL
 curl http://127.0.0.1:8000/health/live
 ```
 
+### One-shot CLI block (for Lobster users)
+
+```bash
+# 0) install into /opt/memL
+sudo mkdir -p /opt && cd /opt
+sudo git clone https://github.com/xuzhe1368-lgtm/memL.git || true
+cd /opt/memL
+
+# 1) create env
+sudo cp -n .env.example .env
+
+# 2) edit required values
+# MEML_ADMIN_TOKEN=your strong admin token
+# MEML_EMBED_API_URL=your embedding endpoint
+# MEML_EMBED_API_KEY=your embedding key
+sudo nano /opt/memL/.env
+
+# 3) deploy + start
+sudo chmod +x /opt/memL/deploy.sh
+sudo /opt/memL/deploy.sh
+sudo systemctl enable --now memL
+
+# 4) verify
+curl -sS http://127.0.0.1:8000/health/live
+curl -sS http://127.0.0.1:8000/metrics/prom | head
+```
+
+
 ## Storage Routing (v0.3.3)
 
 For tenant `collection=personal`, memL uses:
