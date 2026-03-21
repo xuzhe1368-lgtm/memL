@@ -1,0 +1,21 @@
+[Unit]
+Description=memL Memory Service
+After=network.target
+
+[Service]
+Type=simple
+User=meml
+Group=meml
+WorkingDirectory=/opt/memL
+EnvironmentFile=/opt/memL/.env
+ExecStart=/opt/memL/venv/bin/uvicorn app.main:app --host ${MEML_HOST} --port ${MEML_PORT}
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/memL/data /opt/memL
+
+[Install]
+WantedBy=multi-user.target

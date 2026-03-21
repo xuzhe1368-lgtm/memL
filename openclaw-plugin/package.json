@@ -1,0 +1,9 @@
+{
+  "name": "openclaw-plugin-meml",
+  "version": "0.1.0",
+  "description": "memL memory plugin for OpenClaw",
+  "main": "index.ts",
+  "openclaw": {
+    "extensions": ["./index.ts"]
+  }
+}

@@ -1,0 +1,10 @@
+tenants:
+  sk-local-personal:
+    name: personal
+    collection: personal
+  sk-local-work:
+    name: work
+    collection: work
+  sk-local-shared:
+    name: shared
+    collection: shared

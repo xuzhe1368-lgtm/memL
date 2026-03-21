@@ -1,0 +1,38 @@
+{
+  "id": "meml",
+  "name": "memL Memory Plugin",
+  "version": "0.1.0",
+  "description": "Cloud memory plugin for OpenClaw using memL service",
+  "kind": ["memory"],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "apiUrl": {
+        "type": "string",
+        "description": "memL API URL"
+      },
+      "apiKey": {
+        "type": "string",
+        "description": "memL API Key (Bearer token)"
+      },
+      "autoInject": {
+        "type": "boolean",
+        "description": "Auto-inject relevant memories before each prompt",
+        "default": true
+      },
+      "maxMemories": {
+        "type": "integer",
+        "description": "Maximum memories to inject per prompt",
+        "default": 10
+      }
+    },
+    "required": ["apiUrl", "apiKey"]
+  },
+  "uiHints": {
+    "apiUrl": { "label": "API URL", "placeholder": "http://192.168.2.240:8000" },
+    "apiKey": { "label": "API Key", "sensitive": true, "placeholder": "sk-local-personal" },
+    "autoInject": { "label": "Auto-inject memories" },
+    "maxMemories": { "label": "Max memories per prompt" }
+  }
+}
