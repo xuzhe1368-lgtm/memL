@@ -2,6 +2,10 @@
 
 Self-hosted cloud memory service for OpenClaw (multi-instance ready, observable, governable).
 
+> ⚠️ Positioning: **memL is an external-memory service** (deployed as a standalone server), **not a local in-Lobster plugin process**.
+>
+> ✅ Stress-tested and verified on **Ubuntu 24.02**.
+
 > Recommended release: `v0.3.3`
 
 ## Features
