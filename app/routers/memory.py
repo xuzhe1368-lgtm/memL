@@ -4,6 +4,7 @@ from fastapi import APIRouter, Request, Query, HTTPException
 from uuid import uuid4
 from datetime import datetime, timezone
 import hashlib
+import math
 
 from app.models import MemoryCreate, MemoryUpdate
 from app.services.vectorstore import _pack_meta, _unpack_meta
@@ -187,6 +188,7 @@ async def search_memory(
     q: str | None = None,
     tags: list[str] = Query(default=[]),  # 支持 ?tags=a&tags=b
     tag_mode: str = "any",
+    explain: bool = Query(default=False),
     limit: int = Query(default=10, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ):
@@ -221,8 +223,27 @@ async def search_memory(
                     continue
                 vec_score = 1.0 / (1.0 + float(dists[i]))
                 kw_score = 1.0 if ql in (docs[i] or "").lower() else 0.0
-                hybrid = alpha * vec_score + beta * kw_score
-                out.append({
+
+                # 时间衰减：30 天半衰期
+                recency = 1.0
+                try:
+                    if updated:
+                        # 兼容 Z 结尾
+                        s = updated.replace('Z', '+00:00')
+                        ts = datetime.fromisoformat(s)
+                        age_days = max(0.0, (datetime.now(timezone.utc) - ts).total_seconds() / 86400.0)
+                        recency = math.exp(-age_days / 30.0)
+                except Exception:
+                    recency = 1.0
+
+                # 标签加权：命中筛选标签则加分
+                tag_boost = 1.0
+                if tags:
+                    hit = sum(1 for t in tags if t in mtags)
+                    tag_boost = 1.0 + min(0.3, 0.1 * hit)
+
+                hybrid = (alpha * vec_score + beta * kw_score) * recency * tag_boost
+                item = {
                     "id": ids[i],
                     "text": docs[i],
                     "tags": mtags,
@@ -230,9 +251,17 @@ async def search_memory(
                     "created": created,
                     "updated": updated,
                     "score": round(hybrid, 6),
-                    "_vec": vec_score,
-                    "_kw": kw_score,
-                })
+                }
+                if explain:
+                    item["explain"] = {
+                        "vec_score": round(vec_score, 6),
+                        "kw_score": round(kw_score, 6),
+                        "recency": round(recency, 6),
+                        "tag_boost": round(tag_boost, 6),
+                        "alpha": round(alpha, 3),
+                        "beta": round(beta, 3),
+                    }
+                out.append(item)
             out.sort(key=lambda x: x["score"], reverse=True)
         except Exception:
             request.app.state.metrics.inc("embedding_fail_total")
@@ -272,9 +301,6 @@ async def search_memory(
 
     total = len(out)
     out = out[offset: offset + limit]
-    for x in out:
-        x.pop("_vec", None)
-        x.pop("_kw", None)
     return {"ok": True, "data": {"total": total, "results": out}}
 
 
