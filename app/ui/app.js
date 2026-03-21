@@ -67,3 +67,10 @@ $('searchBtn').onclick = async ()=>{ const q=$('q').value.trim(); const r=await 
 $('saveBtn').onclick = async ()=>{ const text=$('newText').value.trim(); if(!text) return; await req('/memory',{method:'POST',body:JSON.stringify({text,tags:['ui']})}); $('newText').value=''; await loadAll(); };
 $('closeDrawer').onclick = ()=> $('drawer').classList.add('hidden');
 
+// 自动恢复会话连接（同一标签页刷新后保持）
+if (cfg.token) {
+  loadAll().catch(()=>{
+    // token 失效或网络异常时保持可手动重连
+  });
+}
+
