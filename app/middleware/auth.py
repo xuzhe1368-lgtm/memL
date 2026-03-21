@@ -8,7 +8,7 @@ EXEMPT_PATHS = {"/", "/health/live", "/health/ready", "/docs", "/openapi.json", 
 
 async def auth_middleware(request: Request, call_next):
     path = request.url.path
-    if path in EXEMPT_PATHS:
+    if path in EXEMPT_PATHS or path == '/ui' or path.startswith('/ui/'):
         return await call_next(request)
 
     auth = request.headers.get("Authorization", "")
