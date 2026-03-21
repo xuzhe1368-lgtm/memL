@@ -57,6 +57,20 @@ def _infer_importance(text: str, tags: list[str], meta: dict) -> float:
     return max(0.0, min(1.0, score))
 
 
+def _tenant_collections(tenant: dict) -> tuple[str, str, str]:
+    base = tenant["collection"]
+    short_col = f"{base}_short"
+    long_col = f"{base}_long"
+    legacy_col = base
+    return short_col, long_col, legacy_col
+
+
+def _all_read_cols(tenant: dict) -> list[str]:
+    s, l, b = _tenant_collections(tenant)
+    # 兼容历史数据：继续读取 legacy base collection
+    return [s, l, b]
+
+
 def now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
@@ -66,7 +80,7 @@ async def create_memory(payload: MemoryCreate, request: Request):
     _require_write_role(request)
     tenant = request.state.tenant
     tenant_name = tenant.get("name", tenant.get("collection", "default"))
-    col = tenant["collection"]
+    short_col, long_col, base_col = _tenant_collections(tenant)
     ts = now_iso()
 
     # 强制标准标签体系
@@ -76,8 +90,9 @@ async def create_memory(payload: MemoryCreate, request: Request):
     importance = payload.importance_score if payload.importance_score is not None else _infer_importance(payload.text, tags, payload.meta)
     promote = bool(payload.promote_to_longterm or importance >= settings.importance_longterm_threshold)
 
-    # tenant 配额（条数）
-    if request.app.state.vs.count(col) >= settings.tenant_max_memories:
+    # tenant 配额（条数）- short + long + legacy 总和
+    total_count = request.app.state.vs.count(short_col) + request.app.state.vs.count(long_col) + request.app.state.vs.count(base_col)
+    if total_count >= settings.tenant_max_memories:
         raise HTTPException(status_code=429, detail="tenant memory quota exceeded")
 
     # tenant 限流（每分钟写入）
@@ -104,36 +119,42 @@ async def create_memory(payload: MemoryCreate, request: Request):
 
     # 去重：仅在拿到 embedding 时执行
     if settings.dedup_enabled and embedding is not None:
-        raw = request.app.state.vs.query(col, embedding, n_results=1)
-        ids = raw.get("ids", [[]])[0]
-        docs = raw.get("documents", [[]])[0]
-        mds = raw.get("metadatas", [[]])[0]
-        dists = raw.get("distances", [[]])[0]
-        if ids:
-            score = 1.0 / (1.0 + float(dists[0]))
-            if score >= settings.dedup_threshold:
-                request.app.state.metrics.inc("dedup_hits_total")
-                tags, meta, created, updated = _unpack_meta(mds[0])
-                out = {
-                    "id": ids[0],
-                    "text": docs[0],
-                    "tags": tags,
-                    "meta": meta,
-                    "created": created,
-                    "updated": updated,
-                    "dedup": True,
-                    "score": round(score, 6),
-                }
-                request.app.state.idemp.set(idk, out)
-                return {"ok": True, "data": out}
+        found = None
+        for c in _all_read_cols(tenant):
+            raw = request.app.state.vs.query(c, embedding, n_results=1)
+            ids = raw.get("ids", [[]])[0]
+            docs = raw.get("documents", [[]])[0]
+            mds = raw.get("metadatas", [[]])[0]
+            dists = raw.get("distances", [[]])[0]
+            if ids:
+                score = 1.0 / (1.0 + float(dists[0]))
+                if (found is None) or (score > found[0]):
+                    found = (score, ids[0], docs[0], mds[0])
+        if found and found[0] >= settings.dedup_threshold:
+            request.app.state.metrics.inc("dedup_hits_total")
+            score, fid, fdoc, fmd = found
+            tags, meta, created, updated = _unpack_meta(fmd)
+            out = {
+                "id": fid,
+                "text": fdoc,
+                "tags": tags,
+                "meta": meta,
+                "created": created,
+                "updated": updated,
+                "dedup": True,
+                "score": round(score, 6),
+            }
+            request.app.state.idemp.set(idk, out)
+            return {"ok": True, "data": out}
 
     rich_meta = {**payload.meta, "importance_score": importance, "promoted": promote}
     md = _pack_meta(rich_meta, tags, ts, ts)
+    target_col = long_col if promote else short_col
 
     if async_mode:
         # 先排队，避免 add() 触发 Chroma 默认 embedding 回退
         queue_append({
-            "collection": col,
+            "collection": target_col,
             "id": mem_id,
             "text": payload.text,
             "tags": tags,
@@ -142,7 +163,7 @@ async def create_memory(payload: MemoryCreate, request: Request):
             "updated": ts,
         })
     else:
-        request.app.state.vs.add(col, mem_id, payload.text, embedding, md)
+        request.app.state.vs.add(target_col, mem_id, payload.text, embedding, md)
 
     request.app.state.metrics.inc("memory_writes_total")
     out = {
@@ -160,8 +181,11 @@ async def create_memory(payload: MemoryCreate, request: Request):
 
 @router.get("/memory/{mem_id}")
 async def get_memory(mem_id: str, request: Request):
-    col = request.state.tenant["collection"]
-    row = request.app.state.vs.get(col, mem_id)
+    row = None
+    for c in _all_read_cols(request.state.tenant):
+        row = request.app.state.vs.get(c, mem_id)
+        if row:
+            break
     if not row:
         raise HTTPException(status_code=404, detail="not found")
 
@@ -182,8 +206,13 @@ async def get_memory(mem_id: str, request: Request):
 @router.patch("/memory/{mem_id}")
 async def update_memory(mem_id: str, payload: MemoryUpdate, request: Request):
     _require_write_role(request)
-    col = request.state.tenant["collection"]
-    row = request.app.state.vs.get(col, mem_id)
+    col = None
+    row = None
+    for c in _all_read_cols(request.state.tenant):
+        row = request.app.state.vs.get(c, mem_id)
+        if row:
+            col = c
+            break
     if not row:
         raise HTTPException(status_code=404, detail="not found")
 
@@ -226,8 +255,15 @@ async def update_memory(mem_id: str, payload: MemoryUpdate, request: Request):
 @router.delete("/memory/{mem_id}")
 async def delete_memory(mem_id: str, request: Request):
     _require_write_role(request)
-    col = request.state.tenant["collection"]
-    request.app.state.vs.delete(col, mem_id)
+    deleted = False
+    for c in _all_read_cols(request.state.tenant):
+        try:
+            request.app.state.vs.delete(c, mem_id)
+            deleted = True
+        except Exception:
+            pass
+    if not deleted:
+        raise HTTPException(status_code=404, detail='not found')
     return {"ok": True}
 
 
@@ -241,7 +277,8 @@ async def search_memory(
     limit: int = Query(default=10, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ):
-    col = request.state.tenant["collection"]
+    tenant = request.state.tenant
+    cols = _all_read_cols(tenant)
     vs = request.app.state.vs
     request.app.state.metrics.inc("memory_search_total")
 
@@ -258,95 +295,109 @@ async def search_memory(
         ql = q.lower().strip()
         try:
             emb = await request.app.state.embedding.embed(q)
-            raw = vs.query(col, emb, n_results=min(1000, max(50, offset + limit * 8)))
-            ids = raw.get("ids", [[]])[0]
-            docs = raw.get("documents", [[]])[0]
-            mds = raw.get("metadatas", [[]])[0]
-            dists = raw.get("distances", [[]])[0]
-
             alpha = max(0.0, min(1.0, settings.hybrid_alpha))
             beta = 1.0 - alpha
-            for i in range(len(ids)):
-                mtags, mmeta, created, updated = _unpack_meta(mds[i])
-                if not tag_ok(mtags):
-                    continue
-                vec_score = 1.0 / (1.0 + float(dists[i]))
-                kw_score = 1.0 if ql in (docs[i] or "").lower() else 0.0
+            for col in cols:
+                raw = vs.query(col, emb, n_results=min(1000, max(50, offset + limit * 8)))
+                ids = raw.get("ids", [[]])[0]
+                docs = raw.get("documents", [[]])[0]
+                mds = raw.get("metadatas", [[]])[0]
+                dists = raw.get("distances", [[]])[0]
 
-                # 时间衰减：30 天半衰期
-                recency = 1.0
-                try:
-                    if updated:
-                        # 兼容 Z 结尾
-                        s = updated.replace('Z', '+00:00')
-                        ts = datetime.fromisoformat(s)
-                        age_days = max(0.0, (datetime.now(timezone.utc) - ts).total_seconds() / 86400.0)
-                        recency = math.exp(-age_days / 30.0)
-                except Exception:
+                for i in range(len(ids)):
+                    mtags, mmeta, created, updated = _unpack_meta(mds[i])
+                    if not tag_ok(mtags):
+                        continue
+                    vec_score = 1.0 / (1.0 + float(dists[i]))
+                    kw_score = 1.0 if ql in (docs[i] or "").lower() else 0.0
+
+                    # 时间衰减：30 天半衰期
                     recency = 1.0
+                    try:
+                        if updated:
+                            s = updated.replace('Z', '+00:00')
+                            ts = datetime.fromisoformat(s)
+                            age_days = max(0.0, (datetime.now(timezone.utc) - ts).total_seconds() / 86400.0)
+                            recency = math.exp(-age_days / 30.0)
+                    except Exception:
+                        recency = 1.0
 
-                # 标签加权：命中筛选标签则加分
-                tag_boost = 1.0
-                if tags:
-                    hit = sum(1 for t in tags if t in mtags)
-                    tag_boost = 1.0 + min(0.3, 0.1 * hit)
+                    # 标签加权：命中筛选标签则加分
+                    tag_boost = 1.0
+                    if tags:
+                        hit = sum(1 for t in tags if t in mtags)
+                        tag_boost = 1.0 + min(0.3, 0.1 * hit)
 
-                hybrid = (alpha * vec_score + beta * kw_score) * recency * tag_boost
-                item = {
-                    "id": ids[i],
-                    "text": docs[i],
-                    "tags": mtags,
-                    "meta": mmeta,
-                    "created": created,
-                    "updated": updated,
-                    "score": round(hybrid, 6),
-                }
-                if explain:
-                    item["explain"] = {
-                        "vec_score": round(vec_score, 6),
-                        "kw_score": round(kw_score, 6),
-                        "recency": round(recency, 6),
-                        "tag_boost": round(tag_boost, 6),
-                        "alpha": round(alpha, 3),
-                        "beta": round(beta, 3),
+                    hybrid = (alpha * vec_score + beta * kw_score) * recency * tag_boost
+                    item = {
+                        "id": ids[i],
+                        "text": docs[i],
+                        "tags": mtags,
+                        "meta": mmeta,
+                        "created": created,
+                        "updated": updated,
+                        "score": round(hybrid, 6),
                     }
-                out.append(item)
+                    if explain:
+                        item["explain"] = {
+                            "vec_score": round(vec_score, 6),
+                            "kw_score": round(kw_score, 6),
+                            "recency": round(recency, 6),
+                            "tag_boost": round(tag_boost, 6),
+                            "alpha": round(alpha, 3),
+                            "beta": round(beta, 3),
+                        }
+                    out.append(item)
+            # 同 id 去重（跨 short/long/legacy）
+            best = {}
+            for it in out:
+                bid = it['id']
+                if bid not in best or (it.get('score') or 0) > (best[bid].get('score') or 0):
+                    best[bid] = it
+            out = list(best.values())
             out.sort(key=lambda x: x["score"], reverse=True)
         except Exception:
             request.app.state.metrics.inc("embedding_fail_total")
             # 降级：embedding 不可用时，走关键词 + 标签过滤
+            for col in cols:
+                all_rows = vs.list_all(col)
+                for i in range(len(all_rows["ids"])):
+                    doc = all_rows["documents"][i]
+                    if ql not in (doc or "").lower():
+                        continue
+                    mtags, mmeta, created, updated = _unpack_meta(all_rows["metadatas"][i])
+                    if not tag_ok(mtags):
+                        continue
+                    out.append({
+                        "id": all_rows["ids"][i],
+                        "text": doc,
+                        "tags": mtags,
+                        "meta": mmeta,
+                        "created": created,
+                        "updated": updated,
+                        "score": 1.0,
+                    })
+    else:
+        for col in cols:
             all_rows = vs.list_all(col)
             for i in range(len(all_rows["ids"])):
-                doc = all_rows["documents"][i]
-                if ql not in (doc or "").lower():
-                    continue
                 mtags, mmeta, created, updated = _unpack_meta(all_rows["metadatas"][i])
                 if not tag_ok(mtags):
                     continue
                 out.append({
                     "id": all_rows["ids"][i],
-                    "text": doc,
+                    "text": all_rows["documents"][i],
                     "tags": mtags,
                     "meta": mmeta,
                     "created": created,
                     "updated": updated,
-                    "score": 1.0,
+                    "score": None,
                 })
-    else:
-        all_rows = vs.list_all(col)
-        for i in range(len(all_rows["ids"])):
-            mtags, mmeta, created, updated = _unpack_meta(all_rows["metadatas"][i])
-            if not tag_ok(mtags):
-                continue
-            out.append({
-                "id": all_rows["ids"][i],
-                "text": all_rows["documents"][i],
-                "tags": mtags,
-                "meta": mmeta,
-                "created": created,
-                "updated": updated,
-                "score": None,
-            })
+        # 跨仓同 id 去重
+        uniq = {}
+        for it in out:
+            uniq[it['id']] = it
+        out = list(uniq.values())
 
     total = len(out)
     out = out[offset: offset + limit]
@@ -375,6 +426,14 @@ async def create_milestone(payload: MilestoneCreate, request: Request):
 
 @router.get("/stats")
 async def stats(request: Request):
-    col = request.state.tenant["collection"]
-    total = request.app.state.vs.count(col)
-    return {"ok": True, "data": {"total_memories": total}}
+    tenant = request.state.tenant
+    short_col, long_col, base_col = _tenant_collections(tenant)
+    short_total = request.app.state.vs.count(short_col)
+    long_total = request.app.state.vs.count(long_col)
+    legacy_total = request.app.state.vs.count(base_col)
+    return {"ok": True, "data": {
+        "total_memories": short_total + long_total + legacy_total,
+        "short_term": short_total,
+        "long_term": long_total,
+        "legacy": legacy_total,
+    }}
