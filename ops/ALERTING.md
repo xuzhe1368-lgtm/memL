@@ -10,6 +10,8 @@
 使用 `ops/alert.rules.yml`，当前内置：
 - `MemLEmbeddingFailuresHigh`：5分钟内 embedding 失败次数 > 5
 - `MemLNoWrites`：30分钟无写入（信息性提示）
+- `MemLPendingQueueBacklog`：异步补算队列积压 > 20 持续 5 分钟
+- `MemLServiceDown`：Prometheus 抓取失败（服务下线）
 
 ## 3) 快速验证
 

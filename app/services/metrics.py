@@ -3,6 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from threading import Lock
 from time import time
+from pathlib import Path
+
+from app.config import settings
 
 
 @dataclass
@@ -20,6 +23,14 @@ class Metrics:
             setattr(self, field_name, getattr(self, field_name) + n)
 
     def snapshot(self) -> dict:
+        qlen = 0
+        qf = Path(settings.queue_file)
+        if qf.exists():
+            try:
+                qlen = sum(1 for _ in qf.open('r', encoding='utf-8'))
+            except Exception:
+                qlen = 0
+
         with self.lock:
             return {
                 "uptime_sec": int(time() - self.started_at),
@@ -28,4 +39,5 @@ class Metrics:
                 "memory_search_total": self.memory_search_total,
                 "dedup_hits_total": self.dedup_hits_total,
                 "embedding_fail_total": self.embedding_fail_total,
+                "pending_queue_size": qlen,
             }

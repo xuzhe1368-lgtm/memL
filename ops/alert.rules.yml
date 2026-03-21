@@ -18,3 +18,21 @@ groups:
         annotations:
           summary: "memL no writes in last 30m"
           description: "No memory writes observed for 30 minutes"
+
+      - alert: MemLPendingQueueBacklog
+        expr: meml_pending_queue_size > 20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "memL async queue backlog"
+          description: "Pending backfill queue size > 20 for 5m"
+
+      - alert: MemLServiceDown
+        expr: up{job="meml"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "memL service down"
+          description: "Prometheus cannot scrape memL for over 1 minute"

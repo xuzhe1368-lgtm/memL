@@ -137,6 +137,9 @@ async def metrics_prom():
         '# HELP meml_embedding_fail_total Total embedding failures',
         '# TYPE meml_embedding_fail_total counter',
         f"meml_embedding_fail_total {m['embedding_fail_total']}",
+        '# HELP meml_pending_queue_size Pending async backfill queue size',
+        '# TYPE meml_pending_queue_size gauge',
+        f"meml_pending_queue_size {m['pending_queue_size']}",
     ]
     return '\n'.join(lines) + '\n'
 
