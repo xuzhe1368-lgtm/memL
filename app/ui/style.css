@@ -11,5 +11,8 @@
 .panel{background:#fff;border:1px solid #e6ebf2;border-radius:12px;padding:14px}.panel-title{font-weight:700;margin-bottom:10px}
 .panel-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}.search-row{display:flex;gap:8px}.search-row input{flex:1;padding:8px;border:1px solid #d8e0ea;border-radius:8px}
 .search-row button{padding:8px 12px;border:0;background:#0f766e;color:#fff;border-radius:8px;cursor:pointer}
-.list{display:flex;flex-direction:column;gap:8px}.item{border:1px solid #edf1f6;border-radius:10px;padding:10px;background:#fafcff}.item .meta{font-size:12px;color:#748093}
+.list{display:flex;flex-direction:column;gap:8px}.item{border:1px solid #edf1f6;border-radius:10px;padding:10px;background:#fafcff;cursor:pointer}.item .meta{font-size:12px;color:#748093}
 .cat{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed #eef2f6;font-size:13px}
+.drawer{position:fixed;top:56px;right:0;width:420px;height:calc(100vh - 56px);background:#fff;border-left:1px solid #e6ebf2;padding:12px;overflow:auto}
+.hidden{display:none}.drawer-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+canvas{max-width:100%;background:#fbfdff;border:1px solid #eef3f8;border-radius:8px}

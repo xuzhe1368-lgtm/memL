@@ -35,6 +35,20 @@
         <div class="panel-title">Memory Pulse</div>
         <div class="panel-row">
           <div>
+            <h4>节奏（最近7天）</h4>
+            <canvas id="bar" width="420" height="140"></canvas>
+          </div>
+          <div>
+            <h4>组成（按标签）</h4>
+            <canvas id="donut" width="220" height="140"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-title">操作台</div>
+        <div class="panel-row">
+          <div>
             <h4>检索</h4>
             <div class="search-row">
               <input id="q" placeholder="输入关键词检索" />
@@ -57,6 +71,13 @@
       </section>
     </main>
   </div>
+
+  <aside id="drawer" class="drawer hidden">
+    <div class="drawer-head">
+      <b>记忆详情</b><button id="closeDrawer">关闭</button>
+    </div>
+    <pre id="drawerBody"></pre>
+  </aside>
 
   <script src="/ui/app.js"></script>
 </body>
