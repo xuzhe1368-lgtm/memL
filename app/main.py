@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+import asyncio
 
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse
@@ -13,6 +14,8 @@ from app.middleware.auth import auth_middleware
 from app.services.embedding import EmbeddingService
 from app.services.vectorstore import VectorStore
 from app.services.metrics import Metrics
+from app.services.reliability import IdempotencyStore, TenantLimiter
+from app.services.queue_worker import queue_worker_loop
 from app.routers.memory import router as memory_router
 from app.routers.admin import router as admin_router
 
@@ -77,11 +80,16 @@ async def startup():
     app.state.embedding = EmbeddingService()
     app.state.vs = VectorStore()
     app.state.metrics = Metrics()
+    app.state.idemp = IdempotencyStore(settings.idemp_file)
+    app.state.limiter = TenantLimiter(settings.tenant_write_rate_per_min)
+    app.state.queue_task = asyncio.create_task(queue_worker_loop(app))
     logger.info("memL started, tenants=%d", len(app.state.tenants))
 
 
 @app.on_event("shutdown")
 async def shutdown():
+    if getattr(app.state, "queue_task", None):
+        app.state.queue_task.cancel()
     await app.state.embedding.close()
     logger.info("memL stopped")
 

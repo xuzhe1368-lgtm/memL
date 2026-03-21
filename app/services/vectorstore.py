@@ -30,9 +30,12 @@ class VectorStore:
     def collection(self, name: str):
         return self.client.get_or_create_collection(name=name)
 
-    def add(self, collection_name: str, mem_id: str, text: str, embedding: list[float], metadata: dict):
+    def add(self, collection_name: str, mem_id: str, text: str, embedding: list[float] | None, metadata: dict):
         col = self.collection(collection_name)
-        col.add(ids=[mem_id], documents=[text], embeddings=[embedding], metadatas=[metadata])
+        kwargs = {"ids": [mem_id], "documents": [text], "metadatas": [metadata]}
+        if embedding is not None:
+            kwargs["embeddings"] = [embedding]
+        col.add(**kwargs)
 
     def get(self, collection_name: str, mem_id: str):
         col = self.collection(collection_name)

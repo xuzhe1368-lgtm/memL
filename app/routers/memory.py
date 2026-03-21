@@ -3,9 +3,11 @@ from __future__ import annotations
 from fastapi import APIRouter, Request, Query, HTTPException
 from uuid import uuid4
 from datetime import datetime, timezone
+import hashlib
 
 from app.models import MemoryCreate, MemoryUpdate
 from app.services.vectorstore import _pack_meta, _unpack_meta
+from app.services.reliability import queue_append
 from app.config import settings
 
 router = APIRouter()
@@ -18,18 +20,38 @@ def now_iso() -> str:
 @router.post("/memory")
 async def create_memory(payload: MemoryCreate, request: Request):
     tenant = request.state.tenant
+    tenant_name = tenant.get("name", tenant.get("collection", "default"))
     col = tenant["collection"]
-    mem_id = f"m_{uuid4().hex[:12]}"
     ts = now_iso()
 
+    # tenant 配额（条数）
+    if request.app.state.vs.count(col) >= settings.tenant_max_memories:
+        raise HTTPException(status_code=429, detail="tenant memory quota exceeded")
+
+    # tenant 限流（每分钟写入）
+    if not request.app.state.limiter.allow(tenant_name):
+        raise HTTPException(status_code=429, detail="tenant write rate limit exceeded")
+
+    # 幂等 key（支持 header 覆盖）
+    idk = request.headers.get("Idempotency-Key")
+    if not idk:
+        raw = f"{tenant_name}|{payload.text}|{','.join(sorted(payload.tags))}"
+        idk = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
+    hit = request.app.state.idemp.get(idk)
+    if hit:
+        return {"ok": True, "data": {**hit, "idempotent": True}}
+
+    mem_id = f"m_{uuid4().hex[:12]}"
+    embedding = None
+    async_mode = False
     try:
         embedding = await request.app.state.embedding.embed(payload.text)
     except Exception:
         request.app.state.metrics.inc("embedding_fail_total")
-        raise
+        async_mode = True
 
-    # 去重：与最相近的一条做阈值比较，命中则直接返回已有记录
-    if settings.dedup_enabled:
+    # 去重：仅在拿到 embedding 时执行
+    if settings.dedup_enabled and embedding is not None:
         raw = request.app.state.vs.query(col, embedding, n_results=1)
         ids = raw.get("ids", [[]])[0]
         docs = raw.get("documents", [[]])[0]
@@ -40,35 +62,45 @@ async def create_memory(payload: MemoryCreate, request: Request):
             if score >= settings.dedup_threshold:
                 request.app.state.metrics.inc("dedup_hits_total")
                 tags, meta, created, updated = _unpack_meta(mds[0])
-                return {
-                    "ok": True,
-                    "data": {
-                        "id": ids[0],
-                        "text": docs[0],
-                        "tags": tags,
-                        "meta": meta,
-                        "created": created,
-                        "updated": updated,
-                        "dedup": True,
-                        "score": round(score, 6),
-                    },
+                out = {
+                    "id": ids[0],
+                    "text": docs[0],
+                    "tags": tags,
+                    "meta": meta,
+                    "created": created,
+                    "updated": updated,
+                    "dedup": True,
+                    "score": round(score, 6),
                 }
+                request.app.state.idemp.set(idk, out)
+                return {"ok": True, "data": out}
 
     md = _pack_meta(payload.meta, payload.tags, ts, ts)
     request.app.state.vs.add(col, mem_id, payload.text, embedding, md)
-    request.app.state.metrics.inc("memory_writes_total")
 
-    return {
-        "ok": True,
-        "data": {
+    if async_mode:
+        queue_append({
+            "collection": col,
             "id": mem_id,
             "text": payload.text,
             "tags": payload.tags,
             "meta": payload.meta,
             "created": ts,
             "updated": ts,
-        },
+        })
+
+    request.app.state.metrics.inc("memory_writes_total")
+    out = {
+        "id": mem_id,
+        "text": payload.text,
+        "tags": payload.tags,
+        "meta": payload.meta,
+        "created": ts,
+        "updated": ts,
+        "embedding_pending": async_mode,
     }
+    request.app.state.idemp.set(idk, out)
+    return {"ok": True, "data": out}
 
 
 @router.get("/memory/{mem_id}")
