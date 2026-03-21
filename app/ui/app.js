@@ -1,5 +1,5 @@
 const $ = (id) => document.getElementById(id);
-let cfg = { apiUrl: localStorage.getItem('meml_api') || 'http://127.0.0.1:8000', token: localStorage.getItem('meml_token') || '' };
+let cfg = { apiUrl: localStorage.getItem('meml_api') || 'http://127.0.0.1:8000', token: sessionStorage.getItem('meml_token') || '' };
 $('apiUrl').value = cfg.apiUrl; $('token').value = cfg.token;
 
 function headers(){ return { 'Authorization': `Bearer ${cfg.token}`, 'Content-Type':'application/json' }; }
@@ -49,7 +49,20 @@ async function refreshStats(){
 
 async function loadAll(){ const r = await req('/memory?limit=80'); bindList(r.data.results); aggregate(r.data.results); await refreshStats(); }
 
-$('connectBtn').onclick = async ()=>{ cfg.apiUrl=$('apiUrl').value.trim(); cfg.token=$('token').value.trim(); localStorage.setItem('meml_api',cfg.apiUrl); await loadAll(); };
+$('connectBtn').onclick = async ()=>{
+  cfg.apiUrl=$('apiUrl').value.trim();
+  cfg.token=$('token').value.trim();
+  localStorage.setItem('meml_api',cfg.apiUrl);
+  sessionStorage.setItem('meml_token', cfg.token);
+  await loadAll();
+};
+
+$('disconnectBtn').onclick = ()=>{
+  cfg.token='';
+  sessionStorage.removeItem('meml_token');
+  $('token').value='';
+  $('list').innerHTML = '<div class="item">已断开，请重新连接</div>';
+};
 $('searchBtn').onclick = async ()=>{ const q=$('q').value.trim(); const r=await req('/memory?limit=80&q='+encodeURIComponent(q)); bindList(r.data.results); aggregate(r.data.results); await refreshStats(); };
 $('saveBtn').onclick = async ()=>{ const text=$('newText').value.trim(); if(!text) return; await req('/memory',{method:'POST',body:JSON.stringify({text,tags:['ui']})}); $('newText').value=''; await loadAll(); };
 $('closeDrawer').onclick = ()=> $('drawer').classList.add('hidden');

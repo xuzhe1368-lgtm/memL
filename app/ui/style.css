@@ -2,6 +2,7 @@
 .topbar{height:56px;background:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid #e6ebf2}
 .brand{font-weight:700}.top-actions{display:flex;gap:8px}.top-actions input{padding:8px;border:1px solid #d8e0ea;border-radius:8px}
 .top-actions button{padding:8px 12px;border:0;background:#2f6fed;color:#fff;border-radius:8px;cursor:pointer}
+.top-actions .btn-muted{background:#6b7280}
 .layout{display:grid;grid-template-columns:280px 1fr;min-height:calc(100vh - 56px)}
 .sidebar{background:#fff;border-right:1px solid #e6ebf2;padding:16px}.sidebar h3{margin:8px 0 10px;font-size:14px;color:#5a6573}
 .tag{display:inline-block;padding:4px 10px;background:#eef3ff;color:#345;margin:4px;border-radius:999px;font-size:12px}
