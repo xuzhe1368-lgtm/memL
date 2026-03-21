@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 import hashlib
 import math
 
-from app.models import MemoryCreate, MemoryUpdate
+from app.models import MemoryCreate, MemoryUpdate, MilestoneCreate
 from app.services.vectorstore import _pack_meta, _unpack_meta
 from app.services.reliability import queue_append
 from app.config import settings
@@ -18,6 +18,43 @@ def _require_write_role(request: Request):
     role = getattr(request.state, 'role', 'editor')
     if role not in ('editor', 'admin'):
         raise HTTPException(status_code=403, detail='forbidden: write requires editor/admin role')
+
+
+def _normalize_tags(tags: list[str], *, allow_fill: bool = True) -> list[str]:
+    t = [x.strip() for x in tags if x and x.strip()]
+    t = list(dict.fromkeys(t))
+    has_type = any(x.startswith('type:') for x in t)
+    has_source = any(x.startswith('source:') for x in t)
+    has_scope = any(x.startswith('scope:') for x in t)
+    if allow_fill:
+        if not has_type:
+            t.insert(0, 'type:project')
+        if not has_source:
+            t.append('source:runtime')
+        if not has_scope:
+            t.append('scope:personal')
+    else:
+        if not (has_type and has_source and has_scope):
+            raise HTTPException(status_code=422, detail='tags must include type:/source:/scope:')
+    return t
+
+
+def _infer_importance(text: str, tags: list[str], meta: dict) -> float:
+    if 'importance_score' in meta:
+        try:
+            v = float(meta.get('importance_score'))
+            return max(0.0, min(1.0, v))
+        except Exception:
+            pass
+    s = (text or '').lower()
+    score = 0.35
+    if any(k in s for k in ['决定','决策','milestone','里程碑','上线','发布']):
+        score += 0.35
+    if any(k in s for k in ['偏好','preference','习惯']):
+        score += 0.2
+    if any(k.startswith('type:') and k in ['type:ops', 'type:project'] for k in tags):
+        score += 0.1
+    return max(0.0, min(1.0, score))
 
 
 def now_iso() -> str:
@@ -32,6 +69,13 @@ async def create_memory(payload: MemoryCreate, request: Request):
     col = tenant["collection"]
     ts = now_iso()
 
+    # 强制标准标签体系
+    tags = _normalize_tags(payload.tags, allow_fill=True)
+
+    # 高价值判定（可显式传 importance_score 覆盖）
+    importance = payload.importance_score if payload.importance_score is not None else _infer_importance(payload.text, tags, payload.meta)
+    promote = bool(payload.promote_to_longterm or importance >= settings.importance_longterm_threshold)
+
     # tenant 配额（条数）
     if request.app.state.vs.count(col) >= settings.tenant_max_memories:
         raise HTTPException(status_code=429, detail="tenant memory quota exceeded")
@@ -43,7 +87,7 @@ async def create_memory(payload: MemoryCreate, request: Request):
     # 幂等 key（支持 header 覆盖）
     idk = request.headers.get("Idempotency-Key")
     if not idk:
-        raw = f"{tenant_name}|{payload.text}|{','.join(sorted(payload.tags))}"
+        raw = f"{tenant_name}|{payload.text}|{','.join(sorted(tags))}"
         idk = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
     hit = request.app.state.idemp.get(idk)
     if hit:
@@ -83,7 +127,8 @@ async def create_memory(payload: MemoryCreate, request: Request):
                 request.app.state.idemp.set(idk, out)
                 return {"ok": True, "data": out}
 
-    md = _pack_meta(payload.meta, payload.tags, ts, ts)
+    rich_meta = {**payload.meta, "importance_score": importance, "promoted": promote}
+    md = _pack_meta(rich_meta, tags, ts, ts)
 
     if async_mode:
         # 先排队，避免 add() 触发 Chroma 默认 embedding 回退
@@ -91,8 +136,8 @@ async def create_memory(payload: MemoryCreate, request: Request):
             "collection": col,
             "id": mem_id,
             "text": payload.text,
-            "tags": payload.tags,
-            "meta": payload.meta,
+            "tags": tags,
+            "meta": {**payload.meta, "importance_score": importance, "promoted": promote},
             "created": ts,
             "updated": ts,
         })
@@ -103,8 +148,8 @@ async def create_memory(payload: MemoryCreate, request: Request):
     out = {
         "id": mem_id,
         "text": payload.text,
-        "tags": payload.tags,
-        "meta": payload.meta,
+        "tags": tags,
+        "meta": {**payload.meta, "importance_score": importance, "promoted": promote},
         "created": ts,
         "updated": ts,
         "embedding_pending": async_mode,
@@ -306,6 +351,26 @@ async def search_memory(
     total = len(out)
     out = out[offset: offset + limit]
     return {"ok": True, "data": {"total": total, "results": out}}
+
+
+@router.post('/memory/milestone')
+async def create_milestone(payload: MilestoneCreate, request: Request):
+    _require_write_role(request)
+    text = f"[Milestone] project={payload.project}; stage={payload.stage}; summary={payload.summary}"
+    if payload.next_step:
+        text += f"; next={payload.next_step}"
+
+    tags = ['type:milestone', 'source:runtime', 'scope:personal', f"project:{payload.project}"] + payload.tags
+
+    # 直接复用 create_memory 逻辑
+    mc = MemoryCreate(
+        text=text,
+        tags=tags,
+        meta={"project": payload.project, "stage": payload.stage, "next_step": payload.next_step},
+        importance_score=0.95,
+        promote_to_longterm=True,
+    )
+    return await create_memory(mc, request)
 
 
 @router.get("/stats")

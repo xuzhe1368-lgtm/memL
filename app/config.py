@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     tenant_max_memories: int = Field(50000, alias="MEML_TENANT_MAX_MEMORIES")
     tenant_write_rate_per_min: int = Field(120, alias="MEML_TENANT_WRITE_RATE_PER_MIN")
     audit_log_file: str = Field("/opt/memL/data/audit.log", alias="MEML_AUDIT_LOG_FILE")
+    importance_longterm_threshold: float = Field(0.75, alias="MEML_IMPORTANCE_LONGTERM_THRESHOLD")
 
     # embedding
     embed_api_url: str = Field(..., alias="MEML_EMBED_API_URL")
