@@ -28,7 +28,8 @@ class VectorStore:
         self.client = chromadb.PersistentClient(path=settings.data_dir)
 
     def collection(self, name: str):
-        return self.client.get_or_create_collection(name=name)
+        # 关闭 Chroma 默认 embedding function，统一使用 memL 自己的 embedding 服务
+        return self.client.get_or_create_collection(name=name, embedding_function=None)
 
     def add(self, collection_name: str, mem_id: str, text: str, embedding: list[float] | None, metadata: dict):
         col = self.collection(collection_name)
