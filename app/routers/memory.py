@@ -144,9 +144,11 @@ async def update_memory(mem_id: str, payload: MemoryUpdate, request: Request):
 
     tags, meta, created, _updated = _unpack_meta(row["metadata"])
     text = row["text"]
+    text_changed = False
 
     if payload.text is not None:
         text = payload.text
+        text_changed = True
     if payload.tags is not None:
         tags = payload.tags
     if payload.meta is not None:
@@ -156,10 +158,12 @@ async def update_memory(mem_id: str, payload: MemoryUpdate, request: Request):
     md = _pack_meta(meta, tags, created, updated)
 
     new_embedding = None
-    if payload.text is not None:
+    text_for_update = None
+    if text_changed:
+        text_for_update = text
         new_embedding = await request.app.state.embedding.embed(text)
 
-    request.app.state.vs.update(col, mem_id, text=text, embedding=new_embedding, metadata=md)
+    request.app.state.vs.update(col, mem_id, text=text_for_update, embedding=new_embedding, metadata=md)
 
     return {
         "ok": True,
