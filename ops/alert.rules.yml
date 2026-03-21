@@ -1,0 +1,20 @@
+groups:
+  - name: meml-alerts
+    rules:
+      - alert: MemLEmbeddingFailuresHigh
+        expr: increase(meml_embedding_fail_total[5m]) > 5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "memL embedding failures increased"
+          description: "Embedding failures > 5 in 5m"
+
+      - alert: MemLNoWrites
+        expr: increase(meml_memory_writes_total[30m]) == 0
+        for: 30m
+        labels:
+          severity: info
+        annotations:
+          summary: "memL no writes in last 30m"
+          description: "No memory writes observed for 30 minutes"

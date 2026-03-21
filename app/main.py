@@ -115,6 +115,32 @@ async def metrics():
     return {"ok": True, "data": app.state.metrics.snapshot()}
 
 
+@app.get('/metrics/prom')
+async def metrics_prom():
+    m = app.state.metrics.snapshot()
+    lines = [
+        '# HELP meml_uptime_sec memL process uptime in seconds',
+        '# TYPE meml_uptime_sec gauge',
+        f"meml_uptime_sec {m['uptime_sec']}",
+        '# HELP meml_requests_total Total HTTP requests',
+        '# TYPE meml_requests_total counter',
+        f"meml_requests_total {m['requests_total']}",
+        '# HELP meml_memory_writes_total Total memory writes',
+        '# TYPE meml_memory_writes_total counter',
+        f"meml_memory_writes_total {m['memory_writes_total']}",
+        '# HELP meml_memory_search_total Total memory searches',
+        '# TYPE meml_memory_search_total counter',
+        f"meml_memory_search_total {m['memory_search_total']}",
+        '# HELP meml_dedup_hits_total Total dedup hits',
+        '# TYPE meml_dedup_hits_total counter',
+        f"meml_dedup_hits_total {m['dedup_hits_total']}",
+        '# HELP meml_embedding_fail_total Total embedding failures',
+        '# TYPE meml_embedding_fail_total counter',
+        f"meml_embedding_fail_total {m['embedding_fail_total']}",
+    ]
+    return '\n'.join(lines) + '\n'
+
+
 @app.get('/ui')
 async def ui_index():
     return FileResponse('app/ui/index.html')
