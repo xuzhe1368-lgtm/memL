@@ -22,11 +22,12 @@ def main():
     out.parent.mkdir(parents=True, exist_ok=True)
     with out.open("w", encoding="utf-8") as f:
         for i, mem_id in enumerate(rows.get("ids", [])):
+            embs = rows.get("embeddings")
             rec = {
                 "id": mem_id,
                 "document": rows.get("documents", [])[i],
                 "metadata": rows.get("metadatas", [])[i],
-                "embedding": rows.get("embeddings", [])[i] if rows.get("embeddings") else None,
+                "embedding": embs[i] if embs is not None else None,
             }
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
