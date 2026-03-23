@@ -6,7 +6,7 @@ Self-hosted cloud memory service for OpenClaw (multi-instance ready, observable,
 >
 > ✅ Stress-tested and verified on **Ubuntu 24.02**.
 
-> Recommended release: `v0.3.3`
+> Recommended release: `v0.3.2`
 
 ## Features
 
@@ -66,7 +66,48 @@ curl -sS http://127.0.0.1:8000/metrics/prom | head
 ```
 
 
-## Storage Routing (v0.3.3)
+## Internal-LAN Copy Deployment (for another OpenClaw host)
+
+Use this when you want to replicate memL/OpenClaw setup to another machine in your internal network.
+
+```bash
+# A) Prepare base environment (as needed)
+# - install git / python / systemd / curl
+
+# B) Clone source
+sudo mkdir -p /opt && cd /opt
+sudo git clone https://github.com/xuzhe1368-lgtm/memL.git || true
+cd /opt/memL
+
+# C) Create fresh config (do NOT copy old secrets)
+sudo cp -n .env.example .env
+# Edit at least:
+# MEML_HOST=127.0.0.1
+# MEML_PORT=8000
+# MEML_ADMIN_TOKEN=<new strong token>
+# MEML_EMBED_API_URL=<endpoint available in new LAN>
+# MEML_EMBED_API_KEY=<new key>
+sudo nano /opt/memL/.env
+
+# D) Deploy and enable service
+sudo chmod +x /opt/memL/deploy.sh
+sudo /opt/memL/deploy.sh
+sudo systemctl enable --now memL
+
+# E) Verify health locally
+curl -sS http://127.0.0.1:8000/health/live
+curl -sS http://127.0.0.1:8000/health/ready
+curl -sS http://127.0.0.1:8000/metrics/prom | head
+```
+
+Migration guardrails:
+
+- Never copy old `.env` and tokens directly; rotate secrets for each environment.
+- Reuse OpenClaw config structure, but replace `apiUrl`/`apiKey` with new environment values.
+- If using reverse proxy, keep memL on localhost and expose HTTPS at proxy layer.
+- Run at least one backup-restore drill before production traffic.
+
+## Storage Routing (v0.3.2)
 
 For tenant `collection=personal`, memL uses:
 

@@ -6,7 +6,7 @@
 > 
 > ✅ 已在 **Ubuntu 24.02** 环境完成压力测试并通过。
 
-> 当前推荐版本：`v0.3.3`
+> 当前推荐版本：`v0.3.2`
 
 ---
 
@@ -31,7 +31,7 @@ memL 现在具备以下核心能力：
 
 ---
 
-## 2. 架构说明（v0.3.3）
+## 2. 架构说明（v0.3.2）
 
 ### 2.1 分仓模型
 
@@ -112,7 +112,48 @@ curl -sS http://127.0.0.1:8000/metrics/prom | head
 curl http://127.0.0.1:8000/health/live
 ```
 
-## 3.2 安全同步升级（推荐）
+## 3.2 内网新环境快速复制部署（推荐）
+
+适用于“另一台内网机器复用同一套 memL/OpenClaw 方案”。
+
+```bash
+# A) 新机基础环境（按需）
+# - 安装 git / python / systemd / curl
+
+# B) 拉取代码
+sudo mkdir -p /opt && cd /opt
+sudo git clone https://github.com/xuzhe1368-lgtm/memL.git || true
+cd /opt/memL
+
+# C) 仅复制模板配置，不直接复用旧机密钥
+sudo cp -n .env.example .env
+# 编辑以下关键项：
+# MEML_HOST=127.0.0.1
+# MEML_PORT=8000
+# MEML_ADMIN_TOKEN=<新环境强口令>
+# MEML_EMBED_API_URL=<新环境可用地址>
+# MEML_EMBED_API_KEY=<新环境密钥>
+sudo nano /opt/memL/.env
+
+# D) 部署并开机自启
+sudo chmod +x /opt/memL/deploy.sh
+sudo /opt/memL/deploy.sh
+sudo systemctl enable --now memL
+
+# E) 本机验活
+curl -sS http://127.0.0.1:8000/health/live
+curl -sS http://127.0.0.1:8000/health/ready
+curl -sS http://127.0.0.1:8000/metrics/prom | head
+```
+
+迁移注意事项（必须）：
+
+- 不要直接复制旧机 `.env` / token，必须为新环境重置密钥。
+- OpenClaw 侧 `openclaw.json` 只复用结构，`apiUrl/apiKey` 用新环境值。
+- 若走反代，维持 `MEML_HOST=127.0.0.1`，由 Nginx/Caddy 暴露 HTTPS。
+- 上线前至少做 1 次备份恢复演练，确认数据可回滚。
+
+## 3.3 安全同步升级（推荐）
 
 使用安全同步脚本避免误删运行态文件：
 
@@ -149,7 +190,7 @@ chmod +x scripts/sync_remote.sh
 
 ---
 
-## 5. API（v0.3.3）
+## 5. API（v0.3.2）
 
 认证：`Authorization: Bearer <token>`
 
@@ -193,7 +234,7 @@ curl -X POST http://127.0.0.1:8000/memory \
   -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{
-    "text":"我们确定 v0.3.3 后进入治理阶段",
+    "text":"我们确定 v0.3.2 后进入治理阶段",
     "tags":["type:project","source:runtime","scope:personal"],
     "importance_score":0.9
   }'
@@ -207,7 +248,7 @@ curl -X POST http://127.0.0.1:8000/memory/milestone \
   -H "Content-Type: application/json" \
   -d '{
     "project":"memL",
-    "stage":"v0.3.3",
+    "stage":"v0.3.2",
     "summary":"分仓与治理闭环完成",
     "next_step":"继续做检索优化"
   }'
