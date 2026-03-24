@@ -8,7 +8,8 @@ import yaml
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    host: str = Field("0.0.0.0", alias="MEML_HOST")
+    # 默认仅本机监听，公网暴露请通过反向代理显式放开
+    host: str = Field("127.0.0.1", alias="MEML_HOST")
     port: int = Field(8000, alias="MEML_PORT")
     log_level: str = Field("INFO", alias="MEML_LOG_LEVEL")
     data_dir: str = Field("/opt/memL/data/chromadb", alias="MEML_DATA_DIR")
@@ -23,6 +24,8 @@ class Settings(BaseSettings):
     # 稳定性/限流
     queue_file: str = Field("/opt/memL/data/pending_writes.jsonl", alias="MEML_QUEUE_FILE")
     idemp_file: str = Field("/opt/memL/data/idempotency.json", alias="MEML_IDEMP_FILE")
+    idemp_ttl_sec: int = Field(7 * 24 * 3600, alias="MEML_IDEMP_TTL_SEC")
+    idemp_max_entries: int = Field(20000, alias="MEML_IDEMP_MAX_ENTRIES")
     tenant_max_memories: int = Field(50000, alias="MEML_TENANT_MAX_MEMORIES")
     tenant_write_rate_per_min: int = Field(120, alias="MEML_TENANT_WRITE_RATE_PER_MIN")
     audit_log_file: str = Field("/opt/memL/data/audit.log", alias="MEML_AUDIT_LOG_FILE")
@@ -49,3 +52,4 @@ def load_tenants(path: str) -> dict:
 def save_tenants(path: str, tenants: dict) -> None:
     with open(path, "w", encoding="utf-8") as f:
         yaml.safe_dump({"tenants": tenants}, f, allow_unicode=True, sort_keys=True)
+

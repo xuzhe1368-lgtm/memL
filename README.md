@@ -7,6 +7,8 @@
 > ✅ 已在 **Ubuntu 24.02** 环境完成压力测试并通过。
 
 > 当前推荐版本：`v0.3.2`
+> 
+> 默认安全基线：`MEML_HOST=127.0.0.1`（仅本机监听），对外访问请通过 Nginx/Caddy 反代 + HTTPS。
 
 ---
 
@@ -181,7 +183,8 @@ chmod +x scripts/sync_remote.sh
 | MEML_TENANT_MAX_MEMORIES | tenant 总容量上限 | 50000 |
 | MEML_TENANT_WRITE_RATE_PER_MIN | tenant 每分钟写入上限 | 120 |
 | MEML_QUEUE_FILE | 异步补算队列文件 | /opt/memL/data/pending_writes.jsonl |
-| MEML_IDEMP_FILE | 幂等键存储 | /opt/memL/data/idempotency.json |
+| MEML_IDEMP_TTL_SEC | 幂等记录保留时长（秒） | 604800 |
+| MEML_IDEMP_MAX_ENTRIES | 幂等记录最大条数 | 20000 |
 | MEML_AUDIT_LOG_FILE | 审计日志文件 | /opt/memL/data/audit.log |
 | MEML_IMPORTANCE_LONGTERM_THRESHOLD | 长期记忆阈值 | 0.75 |
 | MEML_EMBED_API_URL | embedding API 地址 | - |

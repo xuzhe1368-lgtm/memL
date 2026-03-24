@@ -7,6 +7,8 @@ Self-hosted cloud memory service for OpenClaw (multi-instance ready, observable,
 > ✅ Stress-tested and verified on **Ubuntu 24.02**.
 
 > Recommended release: `v0.3.2`
+>
+> Default security baseline: `MEML_HOST=127.0.0.1` (localhost only). If internet/LAN exposure is needed, put Nginx/Caddy + HTTPS in front.
 
 ## Features
 
@@ -138,7 +140,8 @@ Auth header:
 Authorization: Bearer <token>
 ```
 
-- `POST /memory` (supports `importance_score`, `promote_to_longterm`)
+- `MEML_IDEMP_TTL_SEC` (default `604800`, 7 days)
+- `MEML_IDEMP_MAX_ENTRIES` (default `20000`)
 - `POST /memory/milestone`
 - `GET /memory?q=&tags=&limit=&explain=`
 - `GET /memory/{id}`
