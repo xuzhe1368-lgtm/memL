@@ -1,0 +1,52 @@
+name: migration-guard
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Block json.loads on Markdown
+        run: |
+          set -e
+          python - <<'PY'
+          import pathlib, re, sys
+
+          exts = {'.py', '.ts', '.js', '.mjs', '.cjs'}
+          bad = []
+          pattern = re.compile(r'json\.loads\s*\(')
+
+          for p in pathlib.Path('.').rglob('*'):
+              if not p.is_file():
+                  continue
+              if any(part in {'.git', 'node_modules', '.venv', 'venv', 'dist', 'build'} for part in p.parts):
+                  continue
+              if p.suffix.lower() not in exts:
+                  continue
+              try:
+                  text = p.read_text(encoding='utf-8', errors='ignore')
+              except Exception:
+                  continue
+
+              if 'md' in text.lower() and pattern.search(text):
+                  bad.append(str(p))
+
+          if bad:
+              print('❌ Guard failed: suspicious json.loads usage near Markdown handling:')
+              for b in bad:
+                  print(' -', b)
+              sys.exit(1)
+
+          print('✅ Guard passed')
+          PY
+
+      - name: Sanity run safe migration script
+        run: |
+          chmod +x scripts/migrate_memory_safe.py
+          ./scripts/migrate_memory_safe.py --input README.md --output /tmp/migration_output.jsonl --fail-log /tmp/migration_failures.jsonl
