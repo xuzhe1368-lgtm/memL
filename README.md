@@ -10,6 +10,17 @@
 > 
 > 默认安全基线：`MEML_HOST=127.0.0.1`（仅本机监听），对外访问请通过 Nginx/Caddy 反代 + HTTPS。
 
+## Memory 迁移（强制安全入口）
+
+```bash
+python scripts/migrate_memory_safe.py --input ./memory --output migration_output.jsonl
+```
+
+- 固定使用 `utf-8-sig + errors=replace`
+- 自动 Unicode NFC 规范化
+- 自动清洗非法控制字符
+- `.md` 严禁 `json.loads()`（仅 `.json/.jsonl` 解析 JSON）
+
 ---
 
 ## 1. 能力概览
